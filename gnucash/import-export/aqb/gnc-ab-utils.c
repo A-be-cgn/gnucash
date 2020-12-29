@@ -389,6 +389,8 @@ gnc_ab_get_remote_name(const AB_TRANSACTION *ab_trans)
 {
 #ifdef AQBANKING6
     const char* ab_remote_name;
+    const char* ab_ultimate_debtor;
+    const char* ab_ultimate_creditor;
 #else
     const GWEN_STRINGLIST *ab_remote_name;
 #endif
@@ -397,13 +399,36 @@ gnc_ab_get_remote_name(const AB_TRANSACTION *ab_trans)
     g_return_val_if_fail(ab_trans, NULL);
 
     ab_remote_name = AB_Transaction_GetRemoteName(ab_trans);
+
+    #if AQBANKING_VERSION_INT >= 60200
+    /* aqbanking 6.2.0 introduced ultimateDebtor and ultimateCreditor fields which are used by some banks */
+    ab_ultimate_debtor = AB_Transaction_GetUltimateDebtor(ab_trans);
+    ab_ultimate_creditor = AB_Transaction_GetUltimateCreditor(ab_trans);
+    #else
+    ab_ultimate_debtor = NULL;
+    ab_ultimate_creditor = NULL;
+    #endif
     if (ab_remote_name)
+    {
 #ifdef AQBANKING6
-        gnc_other_name = g_strdup(ab_remote_name);
+        if (ab_ultimate_debtor)
+        {
+            if (ab_ultimate_creditor)
+                gnc_other_name = g_strdup_printf("%s; %s; %s", ab_remote_name, ab_ultimate_debtor, ab_ultimate_creditor);
+            else
+            	gnc_other_name = g_strdup_printf("%s; %s", ab_remote_name, ab_ultimate_debtor);
+        } else if (ab_ultimate_creditor)
+        {
+            gnc_other_name = g_strdup_printf("%s; %s", ab_remote_name, ab_ultimate_creditor);
+        } else
+        {
+            gnc_other_name = g_strdup(ab_remote_name);
+        }
 #else
         GWEN_StringList_ForEach(ab_remote_name, join_ab_strings_cb,
                                 &gnc_other_name);
 #endif
+    }
     if (!gnc_other_name || !*gnc_other_name)
     {
         g_free(gnc_other_name);
